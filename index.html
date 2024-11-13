@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine Image Model</title>
+
+    <!-- External Style -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #e6f7ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+            color: #333;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: #007BFF;
+            margin-bottom: 30px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        #webcam-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+
+        #label-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 20px;
+            font-size: 1.2rem;
+            text-align: center;
+        }
+
+        button {
+            font-size: 16px;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            border: none;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        button:focus {
+            outline: none;
+        }
+
+        .start-btn {
+            background-color: #007BFF;
+            color: #fff;
+        }
+
+        .start-btn:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .start-btn:active {
+            background-color: #004085;
+            transform: translateY(0);
+        }
+
+        .stop-btn {
+            background-color: #ff4d4d;
+            color: #fff;
+        }
+
+        .stop-btn:hover {
+            background-color: #e03e3e;
+            transform: translateY(-2px);
+        }
+
+        .stop-btn:active {
+            background-color: #c0392b;
+            transform: translateY(0);
+        }
+
+        /* Styling for the predictions */
+        .prediction {
+            background-color: #f0f8ff;
+            border-radius: 5px;
+            padding: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+
+        .prediction:hover {
+            background-color: #e6f7ff;
+            transform: translateY(-2px);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            button {
+                width: 100%;
+                padding: 12px;
+            }
+
+            #webcam-container {
+                width: 100%;
+                max-width: 450px;
+            }
+
+            .prediction {
+                font-size: 1rem;
+                padding: 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Teachable Machine Image Model</h1>
+    
+    <button class="start-btn" type="button" onclick="init()">Start</button>
+    <button class="stop-btn" type="button" id="stop-btn" onclick="stop()">Stop</button>
+
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+
+    <!-- TensorFlow and Teachable Machine Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    
+    <script type="text/javascript">
+        // Link to your model provided by Teachable Machine export panel
+        const URL = "https://teachablemachine.withgoogle.com/models/M0EreXwHp/";
+
+        let model, webcam, labelContainer, maxPredictions;
+        let running = false;
+
+        // Load the image model and setup the webcam
+        async function init() {
+            if (running) return;  // Prevent starting if already running
+
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // Load the model and metadata
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // Convenience function to setup a webcam
+            const flip = true; // whether to flip the webcam
+            webcam = new tmImage.Webcam(200, 200, flip); // width, height, flip
+            await webcam.setup(); // request access to the webcam
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            // Append webcam canvas to the DOM
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+            labelContainer = document.getElementById("label-container");
+
+            // Create labels for the predictions
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+
+            running = true;  // Mark webcam as running
+        }
+
+        async function loop() {
+            if (!running) return;  // Exit loop if stopped
+            webcam.update(); // Update the webcam frame
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        // Run the webcam image through the image model
+        async function predict() {
+            const prediction = await model.predict(webcam.canvas);
+
+            // Display the predictions in the label container
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction = 
+                    prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = `<div class="prediction">${classPrediction}</div>`;
+            }
+        }
+
+        // Stop the webcam and prediction loop
+        function stop() {
+            running = false;  // Mark webcam as stopped
+            webcam.stop();  // Stop the webcam feed
+
+            // Clear the webcam canvas and label container
+            const webcamCanvas = document.getElementById("webcam-container");
+            webcamCanvas.innerHTML = '';  // Clears the webcam canvas
+
+            labelContainer.innerHTML = '';  // Clear the predictions
+        }
+    </script>
+
+</body>
+</html>
